@@ -157,12 +157,14 @@ void LibcameraApp::ConfigureVideo(unsigned int flags)
 		cfg.size.width = options_->width;
 	if (options_->height)
 		cfg.size.height = options_->height;
+/*
 	if (flags & FLAG_VIDEO_JPEG_COLOURSPACE)
 		cfg.colorSpace = libcamera::ColorSpace::Jpeg;
 	else if (cfg.size.width >= 1280 || cfg.size.height >= 720)
 		cfg.colorSpace = libcamera::ColorSpace::Rec709;
 	else
 		cfg.colorSpace = libcamera::ColorSpace::Smpte170m;
+*/
 	configuration_->transform = options_->transform;
 
 	if (have_raw_stream)
@@ -233,9 +235,9 @@ void LibcameraApp::StartCamera()
 
 	// Build a list of initial controls that we must set in the camera before starting it.
 	// We don't overwrite anything the application may have set before calling us.
-	if (!controls_.contains(controls::ScalerCrop) && options_->roi_width != 0 && options_->roi_height != 0)
+	if (!controls_.contains(controls::ScalerCrop.id()) && options_->roi_width != 0 && options_->roi_height != 0)
 	{
-		Rectangle sensor_area = camera_->properties().get(properties::ScalerCropMaximum);
+		Rectangle sensor_area = *(camera_->properties().get(properties::ScalerCropMaximum));
 		int x = options_->roi_x * sensor_area.width;
 		int y = options_->roi_y * sensor_area.height;
 		int w = options_->roi_width * sensor_area.width;
@@ -250,7 +252,7 @@ void LibcameraApp::StartCamera()
 	// Framerate is a bit weird. If it was set programmatically, we go with that, but
 	// otherwise it applies only to preview/video modes. For stills capture we set it
 	// as long as possible so that we get whatever the exposure profile wants.
-	if (!controls_.contains(controls::FrameDurationLimits))
+	if (!controls_.contains(controls::FrameDurationLimits.id()))
 	{
 		if (StillStream())
 			controls_.set(controls::FrameDurationLimits, { INT64_C(100), INT64_C(1000000000) });
@@ -261,28 +263,28 @@ void LibcameraApp::StartCamera()
 		}
 	}
 
-	if (!controls_.contains(controls::ExposureTime) && options_->shutter)
-		controls_.set(controls::ExposureTime, options_->shutter);
-	if (!controls_.contains(controls::AnalogueGain) && options_->gain)
-		controls_.set(controls::AnalogueGain, options_->gain);
-	if (!controls_.contains(controls::AeMeteringMode))
-		controls_.set(controls::AeMeteringMode, options_->metering_index);
-	if (!controls_.contains(controls::AeExposureMode))
-		controls_.set(controls::AeExposureMode, options_->exposure_index);
-	if (!controls_.contains(controls::ExposureValue))
-		controls_.set(controls::ExposureValue, options_->ev);
-	if (!controls_.contains(controls::AwbMode))
-		controls_.set(controls::AwbMode, options_->awb_index);
-	if (!controls_.contains(controls::ColourGains) && options_->awb_gain_r && options_->awb_gain_b)
+	if (!controls_.contains(controls::ExposureTime.id()) && options_->shutter)
+		controls_.set(controls::ExposureTime.id(), options_->shutter);
+	if (!controls_.contains(controls::AnalogueGain.id()) && options_->gain)
+		controls_.set(controls::AnalogueGain.id(), options_->gain);
+	if (!controls_.contains(controls::AeMeteringMode.id()))
+		controls_.set(controls::AeMeteringMode.id(), options_->metering_index);
+	if (!controls_.contains(controls::AeExposureMode.id()))
+		controls_.set(controls::AeExposureMode.id(), options_->exposure_index);
+	if (!controls_.contains(controls::ExposureValue.id()))
+		controls_.set(controls::ExposureValue.id(), options_->ev);
+	if (!controls_.contains(controls::AwbMode.id()))
+		controls_.set(controls::AwbMode.id(), options_->awb_index);
+	if (!controls_.contains(controls::ColourGains.id()) && options_->awb_gain_r && options_->awb_gain_b)
 		controls_.set(controls::ColourGains, { options_->awb_gain_r, options_->awb_gain_b });
-	if (!controls_.contains(controls::Brightness))
-		controls_.set(controls::Brightness, options_->brightness);
-	if (!controls_.contains(controls::Contrast))
-		controls_.set(controls::Contrast, options_->contrast);
-	if (!controls_.contains(controls::Saturation))
-		controls_.set(controls::Saturation, options_->saturation);
-	if (!controls_.contains(controls::Sharpness))
-		controls_.set(controls::Sharpness, options_->sharpness);
+	if (!controls_.contains(controls::Brightness.id()))
+		controls_.set(controls::Brightness.id(), options_->brightness);
+	if (!controls_.contains(controls::Contrast.id()))
+		controls_.set(controls::Contrast.id(), options_->contrast);
+	if (!controls_.contains(controls::Saturation.id()))
+		controls_.set(controls::Saturation.id(), options_->saturation);
+	if (!controls_.contains(controls::Sharpness.id()))
+		controls_.set(controls::Sharpness.id(), options_->sharpness);
 
 	if (camera_->start(&controls_))
 		throw std::runtime_error("failed to start camera");
@@ -449,7 +451,7 @@ StreamInfo LibcameraApp::GetStreamInfo(Stream const *stream) const
 	info.height = cfg.size.height;
 	info.stride = cfg.stride;
 	info.pixel_format = stream->configuration().pixelFormat;
-	info.colour_space = stream->configuration().colorSpace;
+	// info.colour_space = stream->configuration().colorSpace;
 	return info;
 }
 
@@ -560,8 +562,8 @@ void LibcameraApp::requestComplete(Request *request)
 	// We calculate the instantaneous framerate in case anyone wants it.
 	// Use the sensor timestamp if possible as it ought to be less glitchy than
 	// the buffer timestamps.
-	uint64_t timestamp = payload->metadata.contains(controls::SensorTimestamp)
-							? payload->metadata.get(controls::SensorTimestamp)
+	uint64_t timestamp = payload->metadata.contains(controls::SensorTimestamp.id())
+							? *(payload->metadata.get(controls::SensorTimestamp))
 							: payload->buffers.begin()->second->metadata().timestamp;
 	if (last_timestamp_ == 0 || last_timestamp_ == timestamp)
 		payload->framerate = 0;

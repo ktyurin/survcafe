@@ -155,9 +155,9 @@ void dng_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const
 
 	float black = 4096 * (1 << bayer_format.bits) / 65536.0;
 	float black_levels[] = { black, black, black, black };
-	if (metadata.contains(controls::SensorBlackLevels))
+	if (metadata.contains(controls::SensorBlackLevels.id()))
 	{
-		Span<const int32_t> levels = metadata.get(controls::SensorBlackLevels);
+		Span<const int32_t, 4> levels = *metadata.get(controls::SensorBlackLevels);
 		// levels is in the order R, Gr, Gb, B. Re-order it for the actual bayer order.
 		for (int i = 0; i < 4; i++)
 		{
@@ -170,23 +170,23 @@ void dng_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const
 		std::cerr << "WARNING: no black level found, using default" << std::endl;
 
 	float exp_time = 10000;
-	if (metadata.contains(controls::ExposureTime))
-		exp_time = metadata.get(controls::ExposureTime);
+	if (metadata.contains(controls::ExposureTime.id()))
+		exp_time = *metadata.get(controls::ExposureTime);
 	else
 		std::cerr << "WARNING: default to exposure time of " << exp_time << "us" << std::endl;
 	exp_time /= 1e6;
 
 	uint16_t iso = 100;
-	if (metadata.contains(controls::AnalogueGain))
-		iso = metadata.get(controls::AnalogueGain) * 100.0;
+	if (metadata.contains(controls::AnalogueGain.id()))
+		iso = *metadata.get(controls::AnalogueGain) * 100.0;
 	else
 		std::cerr << "WARNING: default to ISO value of " << iso << std::endl;
 
 	float NEUTRAL[] = { 1, 1, 1 };
 	Matrix WB_GAINS(1, 1, 1);
-	if (metadata.contains(controls::ColourGains))
+	if (metadata.contains(controls::ColourGains.id()))
 	{
-		Span<const float> colour_gains = metadata.get(controls::ColourGains);
+		Span<const float> colour_gains = *metadata.get(controls::ColourGains);
 		NEUTRAL[0] = 1.0 / colour_gains[0];
 		NEUTRAL[2] = 1.0 / colour_gains[1];
 		WB_GAINS = Matrix(colour_gains[0], 1, colour_gains[1]);
@@ -196,9 +196,9 @@ void dng_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const
 	Matrix CCM(1.90255, -0.77478, -0.12777,
 			   -0.31338, 1.88197, -0.56858,
 			   -0.06001, -0.61785, 1.67786);
-	if (metadata.contains(controls::ColourCorrectionMatrix))
+	if (metadata.contains(controls::ColourCorrectionMatrix.id()))
 	{
-		Span<const float> const &coeffs = metadata.get(controls::ColourCorrectionMatrix);
+		Span<const float> const &coeffs = *metadata.get(controls::ColourCorrectionMatrix);
 		CCM = Matrix(coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4], coeffs[5], coeffs[6], coeffs[7], coeffs[8]);
 	}
 	else

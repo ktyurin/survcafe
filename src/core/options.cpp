@@ -92,10 +92,10 @@ bool Options::Parse(int argc, char *argv[])
 					  << "-----------------" << std::endl;
 			for (auto const &cam : cameras)
 			{
-				std::cerr << idx++ << " : " << cam->properties().get(libcamera::properties::Model);
-				if (cam->properties().contains(properties::PixelArrayActiveAreas))
+				std::cerr << idx++ << " : " << cam->properties().get(libcamera::properties::Model).value();
+				if (cam->properties().contains(properties::PixelArrayActiveAreas.id()))
 					std::cerr << " ["
-							  << cam->properties().get(properties::PixelArrayActiveAreas)[0].size().toString()
+							  << cam->properties().get(properties::PixelArrayActiveAreas).value()[0].size().toString()
 							  << "]";
 				std::cerr << " (" << cam->id() << ")" << std::endl;
 
