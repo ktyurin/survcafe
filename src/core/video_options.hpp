@@ -33,11 +33,7 @@ struct VideoOptions : public Options
 			("inline", value<bool>(&inline_headers)->default_value(false)->implicit_value(true),
 			 "Force PPS/SPS header with every I frame (h264 only)")
 			("codec", value<std::string>(&codec)->default_value("h264"),
-			 "Set the codec to use, either h264, "
-#if LIBAV_PRESENT
-			  "libav, "
-#endif
-			  "mjpeg or yuv420")
+			 "Set the codec to use, either h264, mjpeg or yuv420")
 			("save-pts", value<std::string>(&save_pts),
 			 "Save a timestamp file with this name")
 			("quality,q", value<int>(&quality)->default_value(50),
@@ -58,25 +54,6 @@ struct VideoOptions : public Options
 			 "Write output to a circular buffer of the given size (in MB) which is saved on exit")
 			("frames", value<unsigned int>(&frames)->default_value(0),
 			 "Run for the exact number of frames specified. This will override any timeout set.")
-#if LIBAV_PRESENT
-			("libav-format", value<std::string>(&libav_format)->default_value(""),
-			 "Sets the libav encoder output format to use. "
-			 "Leave blank to try and deduce this from the filename.\n"
-			 "To list available formats, run  the \"ffmpeg -formats\" command.")
-			("libav-audio", value<bool>(&libav_audio)->default_value(false)->implicit_value(true),
-			 "Records an audio stream together with the video.")
-			("audio-codec", value<std::string>(&audio_codec)->default_value("aac"),
-			 "Sets the libav audio codec to use.\n"
-			 "To list available codecs, run  the \"ffmpeg -codecs\" command.")
-			("audio-device", value<std::string>(&audio_device)->default_value("default"),
-			 "Audio device to record from. To list the available devices, use the following command:\n"
-			 "pactl list | grep -A2 'Source #' | grep 'Name: '")
-			("audio-bitrate", value<uint32_t>(&audio_bitrate)->default_value(32768),
-			 "Set the audio bitrate for encoding, in bits/second.")
-			("av-sync", value<int32_t>(&av_sync)->default_value(0),
-			 "Add a time offset (in microseconds) to the audio stream, relative to the video stream. "
-			 "The offset value can be either positive or negative.")
-#endif
 			;
 		// clang-format on
 	}
