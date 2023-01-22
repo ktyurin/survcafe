@@ -12,32 +12,81 @@
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
+#include <thread>
+#include <atomic>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 
 #include "core/libcamera_encoder.hpp"
 #include "core/libcamera_app.hpp"
-#include "output/output.hpp"
-#include "output/net_output.hpp"
 #include "image/image.hpp"
+#include "libcamera_server.hpp"
 
 using namespace std::placeholders;
+using namespace std;
 
 
 const int START_VIDEO_SERVER_SIG = SIGRTMIN + 1;
 const int STOP_VIDEO_SERVER_SIG = SIGRTMIN + 2;
 const int SAVE_IMAGE_SIG = SIGRTMIN + 3;
 
-#define START_VIDEO_SERVER_CMD 1
-#define STOP_VIDEO_SERVER_CMD 2
-#define SAVE_IMAGE_CMD 3
-#define NO_CMD 0
 
-#define VIDEO_SERVER_CONNECTED 1
-#define VIDEO_SERVER_WAITING 2
-#define IDLE 0
 
 #define SERVER_WAITING_TIMEOUT 600 // 10 minutes
+
+
+atomic_uint state;
+
+
+CameraManager::CameraManager(int argc, char* argv[])
+{
+    VideoOptions *options = m_app.GetOptions();
+    options->Parse(argc, argv);
+}
+
+
+void CameraManager::executeCommand(ServerCommand command)
+{
+    switch(command)
+    {
+        case ServerCommand::START_VIDEO_SERVER_CMD:
+            break;
+        case ServerCommand::STOP_VIDEO_SERVER_CMD:
+            break;
+        case ServerCommand::CAPTURE_IMAGE:
+            break;
+    }
+}
+
+
+void CameraManager::startVideoServer()
+{
+    if (state == IDLE)
+    {
+        net_output = new NetOutput(options);
+        socket_fd = net_output->startServer();
+        state = VIDEO_SERVER_WAITING;
+        start_waiting_timestamp = time(NULL);
+    }
+}
+
+ServerCommand get_command()
+{
+	string command {};
+    cin >> command;
+    if (command == "start_video_server")
+    {
+
+    }
+    else if (command == "stop_video_server")
+    {
+        cout << "2\n";
+    }
+    else if (command == "capture_image")
+    {
+        cout << "3\n";
+    }
+}
 
 
 static int g_signal_received;
@@ -88,15 +137,12 @@ int sig2cmd()
 // The main even loop for the application.
 
     
-static void event_loop(LibcameraEncoder &app)
+void CameraManager::start()
 {
-	VideoOptions const *options = app.GetOptions();
-
-	NetOutput *net_output = NULL;
-	app.OpenCamera();
+	/*app.OpenCamera();
 	app.ConfigureVideo(LibcameraEncoder::FLAG_VIDEO_NONE);
 	app.StartCamera();
-
+*/
 	int nfds = 0;
 	fd_set rfds;
 	sigset_t sigmask;
@@ -232,15 +278,17 @@ static void event_loop(LibcameraEncoder &app)
 
 int main(int argc, char *argv[])
 {
+    CameraManager cm { argc, argv };
+    cm.start();
+    while (true)
+    {
+        ServerCommand command = get_command();
+
+    }
 	try
 	{
-		LibcameraEncoder app;
-		VideoOptions *options = app.GetOptions();
 		if (options->Parse(argc, argv))
 		{
-			if (options->verbose)
-				options->Print();
-
 			event_loop(app);
 		}
 	}
@@ -249,5 +297,4 @@ int main(int argc, char *argv[])
 		std::cerr << "ERROR: *** " << e.what() << " ***" << std::endl;
 		return -1;
 	}
-	return 0;
 }
