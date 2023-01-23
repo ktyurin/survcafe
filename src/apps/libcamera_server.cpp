@@ -13,7 +13,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <thread>
-#include <atomic>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 
@@ -31,69 +30,7 @@ const int STOP_VIDEO_SERVER_SIG = SIGRTMIN + 2;
 const int SAVE_IMAGE_SIG = SIGRTMIN + 3;
 
 
-
 #define SERVER_WAITING_TIMEOUT 600 // 10 minutes
-
-
-atomic_uint state;
-
-
-CameraManager::CameraManager(int argc, char* argv[])
-{
-    VideoOptions *options = m_app.GetOptions();
-    options->Parse(argc, argv);
-}
-
-
-void CameraManager::executeCommand(ServerCommand command)
-{
-    switch(command)
-    {
-        case ServerCommand::START_VIDEO_SERVER_CMD:
-            break;
-        case ServerCommand::STOP_VIDEO_SERVER_CMD:
-            break;
-        case ServerCommand::CAPTURE_IMAGE:
-            break;
-    }
-}
-
-
-void CameraManager::startVideoServer()
-{
-    if (state == IDLE)
-    {
-        net_output = new NetOutput(options);
-        socket_fd = net_output->startServer();
-        state = VIDEO_SERVER_WAITING;
-        start_waiting_timestamp = time(NULL);
-    }
-}
-
-ServerCommand get_command()
-{
-	string command {};
-    cin >> command;
-    if (command == "start_video_server")
-    {
-
-    }
-    else if (command == "stop_video_server")
-    {
-        cout << "2\n";
-    }
-    else if (command == "capture_image")
-    {
-        cout << "3\n";
-    }
-}
-
-
-static int g_signal_received;
-static void control_signal_handler(int signal_number)
-{
-	g_signal_received = signal_number;
-}
 
 
 void save_image(LibcameraEncoder &app, CompletedRequestPtr &payload, libcamera::Stream *stream,	
@@ -114,35 +51,118 @@ void save_image(LibcameraEncoder &app, CompletedRequestPtr &payload, libcamera::
 }
 
 
-int sig2cmd()
+CameraManager::CameraManager(int argc, char* argv[])
 {
-	int cmd = NO_CMD;
-	if (g_signal_received == START_VIDEO_SERVER_SIG)
-	{
-		cmd = START_VIDEO_SERVER_CMD;
-	}
-	else if (g_signal_received == STOP_VIDEO_SERVER_SIG)
-	{
-		cmd = STOP_VIDEO_SERVER_CMD;
-	}
-	else if (g_signal_received ==  SAVE_IMAGE_SIG)
-	{
-		cmd =  SAVE_IMAGE_CMD;
-	}
-
-	return cmd;
+    VideoOptions *options = m_app.GetOptions();
+    options->Parse(argc, argv);
 }
 
 
-// The main even loop for the application.
+void CameraManager::executeCommand(ServerCommand command)
+{
+    switch(command)
+    {
+        case ServerCommand::OPEN_NETWORK_STREAM:
+            startNetworkStream();
+            break;
+        case ServerCommand::CLOSE_NETWORK_STREAM:
+            stopNetworkStream();
+            break;
+        case ServerCommand::CAPTURE_IMAGE:
+            //captureImage();
+            break;
+    }
+}
 
-    
+
+void CameraManager::startNetworkStream()
+{
+    if (m_state == ServerState::IDLE)
+    {
+        m_net_output = new NetOutput(m_options);
+        m_socket_fd = m_net_output->startServer();
+        m_state = ServerState::WAITING_CONNECTION;
+        start_waiting_timestamp = time(NULL);
+    }
+}
+
+
+void CameraManager::stopNetworkStream()
+{
+    if (m_state == ServerState::WAITING_CONNECTION || m_state == ServerState::CONNECTED)
+    {
+        delete m_net_output;
+        m_net_output = nullptr;
+        if (m_state == ServerState::WAITING_CONNECTION)
+        {
+            close(m_socket_fd);
+        }
+        else
+        {
+            m_app.StopEncoder();
+        }
+        m_state = ServerState::IDLE;
+    }
+}
+
+
+void CameraManager::captureImage(CompletedRequestPtr& frame)
+{
+    save_image(m_app, frame, m_app.VideoStream(), m_options->output);
+}
+
+
+ServerCommand get_command()
+{
+	string command {};
+    cin >> command;
+    if (command == "start_video_server")
+    {
+        return ServerCommand::OPEN_NETWORK_STREAM;
+    }
+    else if (command == "stop_video_server")
+    {
+        return ServerCommand::CLOSE_NETWORK_STREAM;
+    }
+    else if (command == "capture_image")
+    {
+        return ServerCommand::CAPTURE_IMAGE;
+    }
+}
+
+
+static int g_signal_received;
+static void control_signal_handler(int signal_number)
+{
+	g_signal_received = signal_number;
+}
+
+
 void CameraManager::start()
 {
-	/*app.OpenCamera();
-	app.ConfigureVideo(LibcameraEncoder::FLAG_VIDEO_NONE);
-	app.StartCamera();
-*/
+    m_app.OpenCamera();
+	m_app.ConfigureVideo(LibcameraEncoder::FLAG_VIDEO_NONE);
+	m_app.StartCamera();
+
+    m_serving_thread = make_unique<thread>(&CameraManager::serve_forever, this);
+}
+
+
+void CameraManager::stop()
+{
+    m_stop_request = true;
+    m_serving_thread->join();
+    m_serving_thread.reset();
+
+    m_app.CloseCamera();
+    m_app.CloseCamera();
+}
+
+// The main event loop for the application.
+
+    
+void CameraManager::serve_forever()
+{
 	int nfds = 0;
 	fd_set rfds;
 	sigset_t sigmask;
@@ -160,137 +180,98 @@ void CameraManager::start()
     ts.tv_sec = 0;
     ts.tv_nsec = 1000000000 / 8;
 		
-	int socket_fd = 0;
-	
 	time_t start_waiting_timestamp = 0;
-	int state = 0;
-	std::vector<int> commands;
+	std::vector<ServerCommand> commands;
 	
 	
-	for (unsigned int count = 0; ; count++) {
+	while (!m_stop_request)
+    {
 		// Waiting camera frames
-		std::queue<LibcameraEncoder::Msg> *queue = app.Wait();
-		LibcameraEncoder::Msg msg = std::move(queue->front());
-		queue->pop();
-		CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
-		
+		std::queue<LibcameraEncoder::Msg> *queue = m_app.Wait();
+
+        while (!queue->empty())
+        {
+            LibcameraEncoder::Msg msg = std::move(queue->front());
+            queue->pop();
+            CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
+            if (m_state == ServerState::CONNECTED)
+            {
+                m_app.EncodeBuffer(completed_request, m_app.VideoStream());
+            }
+        }
+
 		// Handling state
-		switch (state) {
-			case VIDEO_SERVER_CONNECTED:
-			{
-				if (net_output->closed())
+		switch (m_state) 
+        {
+			case ServerState::CONNECTED:
+				if (m_net_output->closed())
 				{
-					commands.push_back(STOP_VIDEO_SERVER_CMD);
+					commands.push_back(ServerCommand::CLOSE_NETWORK_STREAM);
 				}
-				else
-				{
-					while (!queue->empty())
-					{
-						LibcameraEncoder::Msg msg = std::move(queue->front());
-						queue->pop();
-						completed_request = std::get<CompletedRequestPtr>(msg.payload);
-						app.EncodeBuffer(completed_request, app.VideoStream());
-					}
-				}
-				break;
-			}
-			case VIDEO_SERVER_WAITING:
-			{
+                break;
+			case ServerState::WAITING_CONNECTION:
 				if (time(NULL) - start_waiting_timestamp > SERVER_WAITING_TIMEOUT)
 				{
-					commands.push_back(STOP_VIDEO_SERVER_CMD);
+					commands.push_back(ServerCommand::CLOSE_NETWORK_STREAM);
 				}
 				else
 				{
-					nfds = socket_fd + 1;
-					FD_SET(socket_fd, &rfds);
+
 				}
 				break;
-			}
 		}
+
+        if (m_net_output)
+        {
+            nfds = m_socket_fd + 1;
+            FD_SET(m_socket_fd, &rfds);
+        }
+        else
+        {
+            nfds = 0;
+            FD_CLR(m_socket_fd, &rfds);
+        }
 		
 		// Wait for signals and sockets
 		int retval = pselect(nfds, &rfds, NULL, NULL, &ts, &sigmask);
 
-		if (retval == -1 && errno == EINTR)  // We have received a signal
+		if (retval == -1 && errno == EINTR)  // We have received a signal but we don't handle signals
 		{
-			commands.push_back(sig2cmd());
 		}
 		else if (retval > 0) // We have recevied socket connection
 		{
-			FD_CLR(socket_fd, &rfds);
+			FD_CLR(m_socket_fd, &rfds);
 			nfds = 0;
 			
-			socket_fd = net_output->acceptConnection();
-			app.SetEncodeOutputReadyCallback(std::bind(&NetOutput::OutputReady, net_output, _1, _2, _3, _4));
-			app.StartEncoder();
+			m_socket_fd = m_net_output->acceptConnection();
+			m_app.SetEncodeOutputReadyCallback(std::bind(&NetOutput::OutputReady, m_net_output, _1, _2, _3, _4));
+			m_app.StartEncoder();
 
-			state = VIDEO_SERVER_CONNECTED;
+			m_state = ServerState::CONNECTED;
 		}
 		
 		// Handling command
-		std::vector<int>::iterator iter = commands.begin();
+		std::vector<ServerCommand>::iterator iter = commands.begin();
 		for (; iter < commands.end(); iter++)
 		{
-			switch (*iter) {
-				case SAVE_IMAGE_CMD:
-				{
-					save_image(app, completed_request, app.VideoStream(), options->output);
-					break;
-				}
-				case START_VIDEO_SERVER_CMD:
-				{
-					if (state == IDLE)
-					{
-						net_output = new NetOutput(options);
-						socket_fd = net_output->startServer();
-						state = VIDEO_SERVER_WAITING;
-						start_waiting_timestamp = time(NULL);
-					}
-					break;
-				}
-				case STOP_VIDEO_SERVER_CMD:
-				{
-					if (state == VIDEO_SERVER_WAITING || state == VIDEO_SERVER_CONNECTED)
-					{
-						delete net_output;
-						if (state == VIDEO_SERVER_WAITING)
-						{
-							FD_CLR(socket_fd, &rfds);
-							nfds = 0;
-							close(socket_fd);
-						}
-						else
-						{
-							app.StopEncoder();
-						}
-						state = IDLE;
-					}
-					break;
-				}
-			}
+            executeCommand(*iter);
 		}
 		commands.clear();
 	}
-	
-	return;
 }
+
 
 int main(int argc, char *argv[])
 {
     CameraManager cm { argc, argv };
-    cm.start();
-    while (true)
-    {
-        ServerCommand command = get_command();
-
-    }
 	try
 	{
-		if (options->Parse(argc, argv))
-		{
-			event_loop(app);
-		}
+        cm.start();
+        while (true)
+        {
+            ServerCommand command = get_command();
+            cm.executeCommand(command);
+        }
 	}
 	catch (std::exception const &e)
 	{

@@ -1,20 +1,23 @@
 #pragma once
 
+#include <atomic>
+#include <thread>
+
 #include "output/net_output.hpp"
 
 
 enum class ServerState
 {
-    VIDEO_SERVER_CONNECTED,
-    VIDEO_SERVER_WAITING,
+    CONNECTED,
+    WAITING_CONNECTION,
     IDLE
 };
 
 
 enum class ServerCommand 
 {
-    START_VIDEO_SERVER,
-    STOP_VIDEO_SERVER,
+    OPEN_NETWORK_STREAM,
+    CLOSE_NETWORK_STREAM,
     CAPTURE_IMAGE,
     NOP
 };
@@ -25,12 +28,21 @@ class CameraManager final
     public:
         CameraManager(int argc, char* argv[]);
         void executeCommand(ServerCommand command);
+        void serve_forever();
         void start();
+        void stop();
 
     private:
         LibcameraEncoder m_app;
-        NetOutput *m_net_output  { nullptr };
-        VideoOptions const *m_options { nullptr };
+        std::unique_ptr<std::thread> m_serving_thread;
+        std::atomic<ServerState> m_state {ServerState::IDLE};
+        NetOutput *m_net_output  {nullptr};
+        VideoOptions const *m_options {nullptr};
+        long unsigned int start_waiting_timestamp {};
+        int m_socket_fd {};
+        std::atomic_bool m_stop_request {false};
 
-        void startVideoServer();
+        void startNetworkStream();
+        void stopNetworkStream();
+        void captureImage(CompletedRequestPtr& frame);
 };
