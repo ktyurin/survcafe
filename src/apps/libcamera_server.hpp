@@ -37,8 +37,8 @@ class CameraManager final
         std::unique_ptr<std::thread> m_serving_thread;
         std::atomic<ServerState> m_state {ServerState::IDLE};
         NetOutput *m_net_output  {nullptr};
-        VideoOptions const *m_options {nullptr};
-        long unsigned int start_waiting_timestamp {};
+        VideoOptions *m_options {nullptr};
+        time_t m_start_waiting_timestamp {};
         int m_socket_fd {};
         std::atomic_bool m_stop_request {false};
 

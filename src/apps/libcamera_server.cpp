@@ -53,8 +53,8 @@ void save_image(LibcameraEncoder &app, CompletedRequestPtr &payload, libcamera::
 
 CameraManager::CameraManager(int argc, char* argv[])
 {
-    VideoOptions *options = m_app.GetOptions();
-    options->Parse(argc, argv);
+    m_options = m_app.GetOptions();
+    m_options->Parse(argc, argv);
 }
 
 
@@ -82,7 +82,7 @@ void CameraManager::startNetworkStream()
         m_net_output = new NetOutput(m_options);
         m_socket_fd = m_net_output->startServer();
         m_state = ServerState::WAITING_CONNECTION;
-        start_waiting_timestamp = time(NULL);
+        m_start_waiting_timestamp = time(NULL);
     }
 }
 
@@ -180,7 +180,6 @@ void CameraManager::serve_forever()
     ts.tv_sec = 0;
     ts.tv_nsec = 1000000000 / 8;
 		
-	time_t start_waiting_timestamp = 0;
 	std::vector<ServerCommand> commands;
 	
 	
@@ -210,7 +209,7 @@ void CameraManager::serve_forever()
 				}
                 break;
 			case ServerState::WAITING_CONNECTION:
-				if (time(NULL) - start_waiting_timestamp > SERVER_WAITING_TIMEOUT)
+				if (time(NULL) - m_start_waiting_timestamp > SERVER_WAITING_TIMEOUT)
 				{
 					commands.push_back(ServerCommand::CLOSE_NETWORK_STREAM);
 				}
