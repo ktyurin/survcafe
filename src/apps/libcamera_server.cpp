@@ -47,11 +47,11 @@ static void control_signal_handler(int signal_number)
 }
 
 
-void save_image(LibcameraEncoder &app, CompletedRequestPtr &payload, libcamera::Stream *stream,	
+void save_image(LibcameraEncoder &app, CompletedRequestPtr &payload, libcamera::Stream *stream,
 					   std::string const &filename)
 {
 	StreamInfo info = app.GetStreamInfo(stream);
-	
+
 	const std::vector<libcamera::Span<uint8_t>> mem = app.Mmap(payload->buffers[stream]);
 
 	if ("jpg")
@@ -87,7 +87,7 @@ int sig2cmd()
 
 // The main even loop for the application.
 
-    
+
 static void event_loop(LibcameraEncoder &app)
 {
 	VideoOptions const *options = app.GetOptions();
@@ -101,33 +101,33 @@ static void event_loop(LibcameraEncoder &app)
 	fd_set rfds;
 	sigset_t sigmask;
     struct timespec ts;
-    
+
     signal(SIGPIPE, SIG_IGN);
-       
+
     signal(SIGRTMIN+1, control_signal_handler);
     signal(SIGRTMIN+2, control_signal_handler);
     signal(SIGRTMIN+3, control_signal_handler);
-        
+
     FD_ZERO(&rfds);
     sigemptyset(&sigmask);
-    
+
     ts.tv_sec = 0;
     ts.tv_nsec = 1000000000 / 8;
-		
+
 	int socket_fd = 0;
-	
+
 	time_t start_waiting_timestamp = 0;
 	int state = 0;
 	std::vector<int> commands;
-	
-	
+
+
 	for (unsigned int count = 0; ; count++) {
 		// Waiting camera frames
 		std::queue<LibcameraEncoder::Msg> *queue = app.Wait();
 		LibcameraEncoder::Msg msg = std::move(queue->front());
 		queue->pop();
 		CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
-		
+
 		// Handling state
 		switch (state) {
 			case VIDEO_SERVER_CONNECTED:
@@ -162,7 +162,7 @@ static void event_loop(LibcameraEncoder &app)
 				break;
 			}
 		}
-		
+
 		// Wait for signals and sockets
 		int retval = pselect(nfds, &rfds, NULL, NULL, &ts, &sigmask);
 
@@ -174,59 +174,62 @@ static void event_loop(LibcameraEncoder &app)
 		{
 			FD_CLR(socket_fd, &rfds);
 			nfds = 0;
-			
+
 			socket_fd = net_output->acceptConnection();
 			app.SetEncodeOutputReadyCallback(std::bind(&NetOutput::OutputReady, net_output, _1, _2, _3, _4));
 			app.StartEncoder();
 
 			state = VIDEO_SERVER_CONNECTED;
 		}
-		
+
 		// Handling command
-		std::vector<int>::iterator iter = commands.begin();
-		for (; iter < commands.end(); iter++)
-		{
-			switch (*iter) {
-				case SAVE_IMAGE_CMD:
-				{
-					save_image(app, completed_request, app.VideoStream(), options->output);
-					break;
-				}
-				case START_VIDEO_SERVER_CMD:
-				{
-					if (state == IDLE)
+		if (commands.size() > 0) {
+			std::vector<int>::iterator iter = commands.begin();
+			for (; iter < commands.end(); iter++)
+			{
+				switch (*iter) {
+					case SAVE_IMAGE_CMD:
 					{
-						net_output = new NetOutput(options);
-						socket_fd = net_output->startServer();
-						state = VIDEO_SERVER_WAITING;
-						start_waiting_timestamp = time(NULL);
+						save_image(app, completed_request, app.VideoStream(), options->output);
+						break;
 					}
-					break;
-				}
-				case STOP_VIDEO_SERVER_CMD:
-				{
-					if (state == VIDEO_SERVER_WAITING || state == VIDEO_SERVER_CONNECTED)
+					case START_VIDEO_SERVER_CMD:
 					{
-						delete net_output;
-						if (state == VIDEO_SERVER_WAITING)
+						if (state == IDLE)
 						{
-							FD_CLR(socket_fd, &rfds);
-							nfds = 0;
-							close(socket_fd);
+							net_output = new NetOutput(options);
+							socket_fd = net_output->startServer();
+							state = VIDEO_SERVER_WAITING;
+							start_waiting_timestamp = time(NULL);
 						}
-						else
-						{
-							app.StopEncoder();
-						}
-						state = IDLE;
+						break;
 					}
-					break;
+					case STOP_VIDEO_SERVER_CMD:
+					{
+						if (state == VIDEO_SERVER_WAITING || state == VIDEO_SERVER_CONNECTED)
+						{
+							delete net_output;
+							if (state == VIDEO_SERVER_WAITING)
+							{
+								FD_CLR(socket_fd, &rfds);
+								nfds = 0;
+								close(socket_fd);
+							}
+							else
+							{
+								app.StopEncoder();
+							}
+							state = IDLE;
+						}
+						break;
+					}
 				}
 			}
+			std::cout << "DONE" << std::endl;
+			commands.clear();
 		}
-		commands.clear();
 	}
-	
+
 	return;
 }
 

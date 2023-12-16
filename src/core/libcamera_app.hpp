@@ -48,7 +48,6 @@ public:
 	using CameraConfiguration = libcamera::CameraConfiguration;
 	using FrameBufferAllocator = libcamera::FrameBufferAllocator;
 	using StreamRole = libcamera::StreamRole;
-	using StreamRoles = libcamera::StreamRoles;
 	using PixelFormat = libcamera::PixelFormat;
 	using StreamConfiguration = libcamera::StreamConfiguration;
 	using BufferMap = Request::BufferMap;

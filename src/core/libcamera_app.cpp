@@ -136,7 +136,7 @@ void LibcameraApp::ConfigureVideo(unsigned int flags)
 
 	bool have_raw_stream = (flags & FLAG_VIDEO_RAW) || options_->mode.bit_depth;
 	bool have_lores_stream = options_->lores_width && options_->lores_height;
-	StreamRoles stream_roles = { StreamRole::VideoRecording };
+	std::vector<libcamera::StreamRole> stream_roles = { StreamRole::VideoRecording };
 	int lores_index = 1;
 	if (have_raw_stream)
 	{
@@ -165,7 +165,7 @@ void LibcameraApp::ConfigureVideo(unsigned int flags)
 	else
 		cfg.colorSpace = libcamera::ColorSpace::Smpte170m;
 */
-	configuration_->transform = options_->transform;
+	// configuration_->transform = options_->transform;
 
 	if (have_raw_stream)
 	{
@@ -189,7 +189,7 @@ void LibcameraApp::ConfigureVideo(unsigned int flags)
 		configuration_->at(lores_index).size = lores_size;
 		configuration_->at(lores_index).bufferCount = configuration_->at(0).bufferCount;
 	}
-	configuration_->transform = options_->transform;
+	// configuration_->transform = options_->transform;
 
 	configureDenoise(options_->denoise == "auto" ? "cdn_fast" : options_->denoise);
 	setupCapture();
@@ -570,7 +570,7 @@ void LibcameraApp::requestComplete(Request *request)
 	else
 		payload->framerate = 1e9 / (timestamp - last_timestamp_);
 	last_timestamp_ = timestamp;
-	
+
 	this->msg_queue_.Post(Msg(MsgType::RequestComplete, std::move(payload)));
 }
 

@@ -433,8 +433,10 @@ static void YUV_to_JPEG(const uint8_t *input, StreamInfo const &info,
 	else if (info.pixel_format == libcamera::formats::YUV420)
 		YUV420_to_JPEG(input, info, output_width, output_height, quality, restart,
 					   jpeg_buffer, jpeg_len);
-	else
+	else {
+		std::cout << info.pixel_format << std::endl;
 		throw std::runtime_error("unsupported YUV format in JPEG encode");
+	}
 }
 
 static void create_exif_data(std::vector<libcamera::Span<uint8_t>> const &mem,

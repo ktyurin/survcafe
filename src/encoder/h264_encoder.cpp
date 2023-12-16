@@ -35,7 +35,7 @@ static int get_v4l2_colorspace(std::optional<libcamera::ColorSpace> const &cs)
 		return V4L2_COLORSPACE_SMPTE170M;
 
 	std::cerr << "H264: surprising colour space: " << libcamera::ColorSpace::toString(cs) << std::endl;
-	return V4L2_COLORSPACE_SMPTE170M;
+	return V4L2_COLORSPACE_DEFAULT;
 }
 
 H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
@@ -43,7 +43,7 @@ H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
 {
 	// First open the encoder device. Maybe we should double-check its "caps".
 
-	const char device_name[] = "/dev/video11";
+	const char device_name[] = "/dev/video1";
 	fd_ = open(device_name, O_RDWR, 0);
 	if (fd_ < 0)
 		throw std::runtime_error("failed to open V4L2 H264 encoder");
